@@ -24,13 +24,13 @@ public class Main {
         prompt: while (true) {
             command = sc.next();
             switch (command) {
-                case "comp" -> compress();
-                case "decomp" -> decompress();
-                case "equal" -> equal();
-                case "size" -> size();
-                case "about" -> about();
-                case "exit" -> {break prompt;}
-                default -> System.out.println("unknown command");
+                case "comp": compress();
+                case "decomp": decompress();
+                case "equal": equal();
+                case "size": size();
+                case "about": about();
+                case "exit": {break prompt;}
+                default: System.out.println("unknown command");
             }
         }
         sc.close();
