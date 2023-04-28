@@ -5,7 +5,6 @@
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -26,17 +25,19 @@ class Sequence {
 
 class LZ77Data {
     public byte[] literals;
+    public int[] literalFrequencies;
     public List<Sequence> sequences;
 }
 
 class LZ77 {
-    public int windowSize = 4096;
+    public int windowSize = 524288; // 512K, needs to be lowered later
     public int minMatchLen = 3;
 
     public LZ77Data compress(byte[] data) {
         LZ77Data result = new LZ77Data();
         List<Sequence> matches = new ArrayList<Sequence>();
         byte[] litBuf = new byte[data.length];
+        int[] frequencies = new int[256];
         int litPos = 0;
         int litLen = 0;
 
@@ -72,6 +73,7 @@ class LZ77 {
             }
             else {
                 litBuf[litPos] = data[i];
+                frequencies[(data[i] + 128)]++;
                 litPos++;
                 litLen++;
             }
@@ -81,6 +83,7 @@ class LZ77 {
 
         result.sequences = matches;
         result.literals = new byte[litPos];
+        result.literalFrequencies = frequencies;
         byteCopy(litBuf, 0, litPos, result.literals, 0);
         return result;
     }
@@ -126,103 +129,6 @@ class Zstd {
 
     public static void decompress(String firstFile, String secondFile) {
         return;
-    }
-}
-
-// TODO: remove later
-class Debug {
-    public static String romeo = "Romeo and Juliet\n" +
-    "Excerpt from Act 2, Scene 2\n" +
-    "\n" +
-    "JULIET\n" +
-    "O Romeo, Romeo! wherefore art thou Romeo?\n" +
-    "Deny thy father and refuse thy name;\n" +
-    "Or, if thou wilt not, be but sworn my love,\n" +
-    "And I'll no longer be a Capulet.\n" +
-    "\n" +
-    "ROMEO\n" +
-    "[Aside] Shall I hear more, or shall I speak at this?\n" +
-    "\n" +
-    "JULIET\n" +
-    "'Tis but thy name that is my enemy;\n" +
-    "Thou art thyself, though not a Montague.\n" +
-    "What's Montague? it is nor hand, nor foot,\n" +
-    "Nor arm, nor face, nor any other part\n" +
-    "Belonging to a man. O, be some other name!\n" +
-    "What's in a name? that which we call a rose\n" +
-    "By any other name would smell as sweet;\n" +
-    "So Romeo would, were he not Romeo call'd,\n" +
-    "Retain that dear perfection which he owes\n" +
-    "Without that title. Romeo, doff thy name,\n" +
-    "And for that name which is no part of thee\n" +
-    "Take all myself.\n" +
-    "\n" +
-    "ROMEO\n" +
-    "I take thee at thy word:\n" +
-    "Call me but love, and I'll be new baptized;\n" +
-    "Henceforth I never will be Romeo.\n" +
-    "\n" +
-    "JULIET\n" +
-    "What man art thou that thus bescreen'd in night\n" +
-    "So stumblest on my counsel?\n";
-
-    public static void writeToFile(byte[] data, String filename) {
-        try {
-            FileOutputStream f = new FileOutputStream(filename);
-            f.write(data);
-            f.close();
-        } catch (Exception e) {
-            System.out.println("writeToFile failed!");
-        }
-    }
-
-    public static void test() {
-        System.out.println("LZ77");
-        LZ77 LZComp = new LZ77();
-        // debugLZ(LZComp, new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 }, 1);
-        // debugLZ(LZComp, new byte[] { 0, 1, 0, 1, 0, 1, 0, 1 }, 2);
-        // debugLZ(LZComp, new byte[] { 0, 1, 0, 1, 0, 1, 0, 1, 0 }, 3);
-        // debugLZ(LZComp, new byte[] { 0, 1, 0, 1, 0, 1, 0, 1, 0, 1 }, 4);
-        // debugLZ(LZComp, new byte[] { 0, 0, 1, 0, 0, 1, 2, 0, 0, 1, 2 }, 5);
-        //debugLZ(LZComp, "Testing Some Text, Testing Text So Some".getBytes(StandardCharsets.ISO_8859_1), 6);
-        debugLZ(LZComp, romeo.getBytes(StandardCharsets.ISO_8859_1), 7);
-    }
-
-    public static void debugLZ(LZ77 comp, byte[] inData, int testNo) {
-        System.out.printf("Comp %d\n", testNo);
-        LZ77Data compData = comp.compress(inData);
-
-        System.out.print("Data: ");
-        // System.out.print("{ ");
-        // for (int i = 0; i < inData.length; i++) {
-        //     System.out.printf("%02X ", inData[i]);
-        // }
-        // System.out.println("}");
-        writeToFile(inData, testNo + ".orig.bin");
-        
-        
-        System.out.print("Literals: ");
-        System.out.print("{ ");
-        for (int i = 0; i < compData.literals.length; i++) {
-            System.out.printf("%02X ", compData.literals[i]);
-        }
-        System.out.println("}");
-        writeToFile(compData.literals, testNo + ".lit");
-        
-        System.out.print("Sequences: ");
-        for (Sequence seq : compData.sequences) {
-            System.out.printf("(%d, %d, %d), ", seq.litLen, seq.matchOff, seq.matchLen);
-        }
-        System.out.println();
-
-        System.out.print("Decomp: ");
-        byte[] outData = comp.decompress(compData.sequences, compData.literals);
-        // System.out.print("{ ");
-        // for (int i = 0; i < outData.length; i++) {
-        //     System.out.printf("%02X ", outData[i]);
-        // }
-        // System.out.println("}");
-        writeToFile(outData, testNo + ".bin");
     }
 }
 
@@ -323,3 +229,88 @@ public class Main {
     }
 }
 
+// TODO: remove later
+class Debug {
+    public static void test() {
+        System.out.println("LZ77");
+        LZ77 LZComp = new LZ77();
+        debugLZ(LZComp, readFromFile("data/romeo.txt"), 1);
+        debugLZ(LZComp, readFromFile("data/negativeBytes.bin"), 2);
+        debugLZ(LZComp, readFromFile("data/File2.html"), 3);
+    }
+
+    public static void debugLZ(LZ77 comp, byte[] inData, int testNo) {
+        System.out.printf("Comp %d\n", testNo);
+        LZ77Data compData = comp.compress(inData);
+
+        System.out.print("Data: ");
+        //printByteArray(inData);
+        writeToFile(inData, testNo + ".orig.bin");
+        
+        System.out.print("Literals: ");
+        //printByteArray(compData.literals);
+        writeToFile(compData.literals, testNo + ".lit");
+
+        System.out.print("Frequencies: ");
+        //printIntArray(compData.literalFrequencies);
+        
+        System.out.print("Sequences: ");
+        //printSequences(compData.sequences);
+        System.out.println(compData.sequences.size());
+
+        System.out.print("Decomp: ");
+        byte[] outData = comp.decompress(compData.sequences, compData.literals);
+        //printByteArray(outData);
+        writeToFile(outData, testNo + ".bin");
+    }
+
+    public static void printSequences(List<Sequence> sequences) {
+        for (Sequence seq : sequences) {
+            System.out.printf(
+                "(%d, %d, %d), ",
+                seq.litLen,
+                seq.matchOff,
+                seq.matchLen
+            );
+        }
+        System.out.println();
+    }
+
+    public static void printByteArray(byte[] data) {
+        System.out.print("{ ");
+        for (int i = 0; i < data.length; i++) {
+            System.out.printf("%02X ", data[i]);
+        }
+        System.out.println("}");
+    }
+
+    public static void printIntArray(int[] data) {
+        System.out.print("{ ");
+        for (int i = 0; i < data.length; i++) {
+            System.out.printf("%02X ", data[i]);
+        }
+        System.out.println("}");
+    }
+
+    public static void writeToFile(byte[] data, String filename) {
+        try {
+            FileOutputStream f = new FileOutputStream(filename);
+            f.write(data);
+            f.close();
+        } catch (Exception e) {
+            System.out.println("writeToFile failed!");
+        }
+    }
+
+    public static byte[] readFromFile(String filename) {
+        try {
+            FileInputStream f = new FileInputStream(filename);
+            byte[] ret = f.readAllBytes();
+            f.close();
+            return ret;
+        } catch (Exception e) {
+            System.out.println("readFromFile failed!");
+            return new byte[0];
+        }
+    }
+}
