@@ -6,8 +6,13 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.Scanner;
+import java.util.TreeMap;
+
+//#region LZ77
 
 class Sequence {
     // Note: matchOff is the "Cooked match offset", not the "Raw match offset"
@@ -128,6 +133,104 @@ class LZ77 {
         }
     }
 }
+//#endregion
+
+//#region Huffman
+
+class HuffmanNode implements Comparable<HuffmanNode> {
+    public int weight;
+    public int symbol;
+    public int code;
+    public HuffmanNode parent;
+    public HuffmanNode left;
+    public HuffmanNode right;
+    public TreeMap<Integer, HuffmanNode> leafs;
+
+    public HuffmanNode(int weight, HuffmanNode left, HuffmanNode right) {
+        this.weight = weight;
+        this.left = left;
+        this.right = right;
+    }
+
+    public HuffmanNode(int weight, int symbol) {
+        this.weight = weight;
+        this.symbol = symbol;
+    }
+
+    @Override
+    public int compareTo(HuffmanNode node) {
+        return Integer.compare(this.weight, node.weight);
+    }
+}
+
+class Huffman {
+    public HuffmanNode generateHuffmanTree(int[] symbolFrequencies) {
+        // Generate all leaf nodes
+        TreeMap<Integer, HuffmanNode> leafs = new TreeMap<Integer, HuffmanNode>();
+        for (int i = 0; i < symbolFrequencies.length; i++) {
+            if (symbolFrequencies[i] > 0) {
+                leafs.put(i, new HuffmanNode(symbolFrequencies[i], i));
+            }
+        }
+        
+        // Create sorted set for all nodes of the tree, initialize with leafs
+        PriorityQueue<HuffmanNode> nodes =
+            new PriorityQueue<HuffmanNode>(leafs.values());
+
+        // Construct Huffman tree
+        HuffmanNode newParent = new HuffmanNode(0, 0);
+        while (nodes.size() > 1) {
+            HuffmanNode left = nodes.poll();
+            HuffmanNode right = nodes.poll();
+
+            if (left == null || right == null)
+                System.out.println();
+            
+            newParent = new HuffmanNode(
+                left.weight + right.weight,
+                left,
+                right
+            );
+
+            left.parent = newParent;
+            right.parent = newParent;
+            nodes.add(newParent);
+        }
+
+        // Generate prefix codes for each symbol
+        for (HuffmanNode leaf : leafs.values()) {
+            HuffmanNode previousNode, currentNode = leaf;
+            while (currentNode.parent != null) {
+                previousNode = currentNode;
+                currentNode = previousNode.parent;
+
+                leaf.code = leaf.code << 1;
+                if (currentNode.right == previousNode) {
+                    leaf.code += 1;
+                }
+            }
+        }
+
+        newParent.leafs = leafs;
+        return newParent;
+    }
+
+    public byte[] compress(byte[] data, HuffmanNode huffmanTree) {
+        byte[] buf = new byte[data.length];
+        BitStreamWriter writer = new BitStreamWriter(buf);
+
+        for (int i = 0; i < data.length; i++) {
+            writer.write(huffmanTree.leafs.get((int)data[i]).code);
+        }
+
+        return Arrays.copyOfRange(buf, buf.length - writer.length() + 1, buf.length);
+    }
+
+    public byte[] decompress(int origSize, byte[] compressed, byte[] symbolMap) {
+        return new byte[0];
+    }
+}
+//#endregion
 
 class Zstd {
     public static void compress(String firstFile, String secondFile) {
@@ -240,18 +343,154 @@ public class Main {
     }
 }
 
+//#region Utility
+
+class BitStreamReader {
+    private int bitBuf;
+    private int bitsUsed;
+    private int pos;
+    private int len;
+    public byte[] buf;
+    
+    public BitStreamReader(byte[] buf, int len) {
+        this.pos = buf.length-1;
+        this.buf = buf;
+        this.len = len;
+    }
+
+    public int readBit() {
+        return read(1);
+    }
+
+    public int read(int bitSize) {
+        while (bitsUsed < bitSize) {
+            if (pos < buf.length - len) {
+                break;
+            }
+
+            bitBuf = bitBuf | buf[pos] << bitsUsed;
+            bitsUsed += 8;
+            pos--;
+
+            // Sentinel bit
+            if (pos < buf.length - len) {
+                int highBit = Integer.highestOneBit(bitBuf);
+                bitsUsed = Integer.numberOfTrailingZeros(highBit);
+                bitBuf ^= highBit;
+            }
+        }
+
+        int value = bitBuf & ~(0xFF << bitSize);
+        bitBuf = bitBuf >> bitSize;
+        bitsUsed -= bitSize;
+
+        return value;
+    }
+
+    public boolean endOfStream() {
+        return (pos < buf.length - len) && bitsUsed == 0;
+    }
+}
+
+class BitStreamWriter {
+    private int bitBuf;
+    private int bitsUsed;
+    private int pos;
+    public byte[] buf;
+    
+    public BitStreamWriter(byte[] buf) {
+        this.pos = buf.length-1;
+        this.buf = buf;
+    }
+
+    public void write(int value) {
+        int bitSize = 1;
+        if (value != 0) {
+            bitSize = Integer.numberOfTrailingZeros(
+                Integer.highestOneBit(value)
+            ) + 1;
+        }
+
+        bitBuf = bitBuf | value << bitsUsed;
+        bitsUsed += bitSize;
+        
+        while (bitsUsed >= 8) {
+            buf[pos] = (byte)(bitBuf);
+            pos--;
+            bitBuf = bitBuf >>> 8;
+            bitsUsed -= 8;
+        }
+    }
+
+    public void flush() {
+        // Sentinel bit
+        write(1);
+
+        while (bitBuf != 0) {
+            buf[pos] = (byte)(bitBuf);
+            pos--;
+            bitBuf = bitBuf >>> 8;
+            bitsUsed -= 8;
+        }
+
+        bitsUsed = 0;
+    }
+
+    public int length() {
+        return buf.length - pos;
+    }
+}
+
 // TODO: remove later
 class Debug {
     public static void test() {
         System.out.println("LZ77");
         LZ77 LZComp = new LZ77();
-        debugLZ(LZComp, readFromFile("data/romeo.txt"), 1);
-        debugLZ(LZComp, readFromFile("data/negativeBytes.bin"), 2);
-        debugLZ(LZComp, readFromFile("data/File2.html"), 3);
+        Huffman HuffComp = new Huffman();
+        byte[] bitStream = new byte[10];
+        debugHuff(
+            HuffComp,
+            debugLZ(LZComp, readFromFile("data/romeo.txt"), 1),
+            1
+        );
+        //debugLZ(LZComp, readFromFile("data/negativeBytes.bin"), 2);
+        //debugLZ(LZComp, readFromFile("data/File2.html"), 3);
+
+        BitStreamWriter writer = new BitStreamWriter(bitStream);
+        BitStreamReader reader = new BitStreamReader(bitStream, writer.length());
+        debugBitWriter(writer);
+        debugBitReader(reader);
     }
 
-    public static void debugLZ(LZ77 comp, byte[] inData, int testNo) {
-        System.out.printf("Comp %d\n", testNo);
+    public static void debugBitWriter(BitStreamWriter writer) {
+        writer.write(0);
+        writer.write(1);
+        writer.write(2);
+        writer.write(3);
+        writer.flush();
+    }
+
+    public static void debugBitReader(BitStreamReader reader) {
+        System.out.println(reader.readBit());
+        System.out.println(reader.readBit());
+        System.out.println(reader.endOfStream());
+        System.out.println(reader.read(2));
+        System.out.println(reader.read(2));
+        System.out.println(reader.endOfStream());
+        System.out.println(reader.read(8));
+    }
+
+    public static void debugHuff(Huffman comp, LZ77Data data, int testNo) {
+        System.out.printf("Huff Comp %d\n", testNo);
+        System.out.print("Huffman bitstream: ");
+        writeToFile(comp.compress(
+            data.literals,
+            comp.generateHuffmanTree(data.literalFrequencies)
+        ), testNo + ".huff");
+    }
+
+    public static LZ77Data debugLZ(LZ77 comp, byte[] inData, int testNo) {
+        System.out.printf("LZ Comp %d\n", testNo);
         LZ77Data compData = comp.compress(inData);
 
         System.out.print("Data: ");
@@ -273,6 +512,8 @@ class Debug {
         byte[] outData = comp.decompress(compData.sequences, compData.literals);
         //printByteArray(outData);
         writeToFile(outData, testNo + ".bin");
+
+        return compData;
     }
 
     public static void printSequences(List<Sequence> sequences) {
@@ -325,3 +566,4 @@ class Debug {
         }
     }
 }
+//#endregion
