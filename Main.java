@@ -141,6 +141,7 @@ class HuffmanNode implements Comparable<HuffmanNode> {
     public int weight;
     public int symbol;
     public int code;
+    public int codeBits;
     public HuffmanNode parent;
     public HuffmanNode left;
     public HuffmanNode right;
@@ -200,15 +201,19 @@ class Huffman {
         // Generate prefix codes for each symbol
         for (HuffmanNode leaf : leafs.values()) {
             HuffmanNode previousNode, currentNode = leaf;
+            int stepsTaken = 0;
+
             while (currentNode.parent != null) {
                 previousNode = currentNode;
                 currentNode = previousNode.parent;
 
-                leaf.code = leaf.code << 1;
                 if (currentNode.right == previousNode) {
-                    leaf.code += 1;
+                    leaf.code += (1 << stepsTaken);
                 }
+                stepsTaken += 1;
             }
+
+            leaf.codeBits = stepsTaken;
         }
 
         newParent.leafs = leafs;
@@ -220,9 +225,11 @@ class Huffman {
         BitStreamWriter writer = new BitStreamWriter(buf);
 
         for (int i = 0; i < data.length; i++) {
-            writer.write(huffmanTree.leafs.get((int)data[i]).code);
+            HuffmanNode leaf = huffmanTree.leafs.get((int)data[i]);
+            writer.write(leaf.code, leaf.codeBits);
         }
 
+        writer.flush();
         return Arrays.copyOfRange(buf, buf.length - writer.length() + 1, buf.length);
     }
 
@@ -353,7 +360,7 @@ class BitStreamReader {
     public byte[] buf;
     
     public BitStreamReader(byte[] buf, int len) {
-        this.pos = buf.length-1;
+        this.pos = 0;
         this.buf = buf;
         this.len = len;
     }
@@ -364,16 +371,16 @@ class BitStreamReader {
 
     public int read(int bitSize) {
         while (bitsUsed < bitSize) {
-            if (pos < buf.length - len) {
+            if (pos >= len) {
                 break;
             }
 
             bitBuf = bitBuf | buf[pos] << bitsUsed;
             bitsUsed += 8;
-            pos--;
+            pos++;
 
             // Sentinel bit
-            if (pos < buf.length - len) {
+            if (pos >= len) {
                 int highBit = Integer.highestOneBit(bitBuf);
                 bitsUsed = Integer.numberOfTrailingZeros(highBit);
                 bitBuf ^= highBit;
@@ -399,38 +406,30 @@ class BitStreamWriter {
     public byte[] buf;
     
     public BitStreamWriter(byte[] buf) {
-        this.pos = buf.length-1;
+        this.pos = buf.length - 1;
         this.buf = buf;
+
+        // Sentinel bit
+        write(1, 1);
     }
 
-    public void write(int value) {
-        int bitSize = 1;
-        if (value != 0) {
-            bitSize = Integer.numberOfTrailingZeros(
-                Integer.highestOneBit(value)
-            ) + 1;
-        }
-
-        bitBuf = bitBuf | value << bitsUsed;
+    public void write(int value, int bitSize) {
+        bitBuf = (bitBuf << bitSize) | value;
         bitsUsed += bitSize;
         
-        while (bitsUsed >= 8) {
-            buf[pos] = (byte)(bitBuf);
-            pos--;
-            bitBuf = bitBuf >>> 8;
+        while (bitsUsed >= Byte.SIZE) {
+            buf[pos] = (byte)(bitBuf >>> bitsUsed - Byte.SIZE);
             bitsUsed -= 8;
+            pos--;
         }
     }
 
     public void flush() {
-        // Sentinel bit
-        write(1);
-
-        while (bitBuf != 0) {
-            buf[pos] = (byte)(bitBuf);
+        if (bitsUsed > 0 && bitsUsed <= 8) {
+            bitBuf = (bitBuf & 0xFF) << Byte.SIZE - bitsUsed;
+            buf[pos] = (byte)bitBuf;
+            bitsUsed -= bitsUsed;
             pos--;
-            bitBuf = bitBuf >>> 8;
-            bitsUsed -= 8;
         }
 
         bitsUsed = 0;
@@ -453,20 +452,20 @@ class Debug {
             debugLZ(LZComp, readFromFile("data/romeo.txt"), 1),
             1
         );
-        //debugLZ(LZComp, readFromFile("data/negativeBytes.bin"), 2);
-        //debugLZ(LZComp, readFromFile("data/File2.html"), 3);
+        // debugLZ(LZComp, readFromFile("data/negativeBytes.bin"), 2);
+        // debugLZ(LZComp, readFromFile("data/File2.html"), 3);
 
-        BitStreamWriter writer = new BitStreamWriter(bitStream);
-        BitStreamReader reader = new BitStreamReader(bitStream, writer.length());
-        debugBitWriter(writer);
-        debugBitReader(reader);
+        // BitStreamWriter writer = new BitStreamWriter(bitStream);
+        // BitStreamReader reader = new BitStreamReader(bitStream, writer.length());
+        // debugBitWriter(writer);
+        // debugBitReader(reader);
     }
 
     public static void debugBitWriter(BitStreamWriter writer) {
-        writer.write(0);
-        writer.write(1);
-        writer.write(2);
-        writer.write(3);
+        writer.write(0, 2);
+        writer.write(1,5);
+        writer.write(2, 3);
+        writer.write(3, 7);
         writer.flush();
     }
 
