@@ -138,15 +138,19 @@ public class Main {
     static String firstFile, secondFile;
 
     public static void main(String[] args) {
+        System.out.println("started");
         prompt: while (true) {
             command = sc.next();
             switch (command) {
-                case "comp": compress();
-                case "decomp": decompress();
-                case "equal": equal();
-                case "size": size();
-                case "about": about();
-                case "debug": Debug.test();
+                case "comp": {
+                    compress();
+                    break;
+                }
+                case "decomp": {decompress(); break;}
+                case "equal": {equal(); break;}
+                case "size": {size(); break;}
+                case "about": {about(); break;}
+                case "debug": { Debug.test(); break;}
                 case "exit": {break prompt;}
                 default: System.out.println("unknown command");
             }
