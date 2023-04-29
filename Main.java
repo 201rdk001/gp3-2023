@@ -10,9 +10,10 @@ import java.util.List;
 import java.util.Scanner;
 
 class Sequence {
-    public int litLen;
-    // TODO: do we store "raw" or "cooked" offset?
+    // Note: matchOff is the "Cooked match offset", not the "Raw match offset"
     // For the difference, see https://nigeltao.github.io/blog/2022/zstandard-part-1-concepts.html#matches
+
+    public int litLen;
     public int matchOff;
     public int matchLen;
 
@@ -67,19 +68,24 @@ class LZ77 {
             }
 
             if (maxMatch >= 0 && maxMatchLen >= minMatchLen) {
+                // Convert "Raw offset match" into "Cooked offset match"
+                maxMatch += 3;
+
                 matches.add(new Sequence(litLen, maxMatch, maxMatchLen));
                 litLen = 0;
                 i += (maxMatchLen - 1);
             }
             else {
                 litBuf[litPos] = data[i];
-                frequencies[(data[i] + 128)]++;
+                // Java bytes are always signed, and unsigned variants
+                // don't exist, so conversion to to integer is required
+                frequencies[(data[i] & 0xff)]++;
                 litPos++;
                 litLen++;
             }
         }
 
-        matches.add(new Sequence(litLen, 0, 0));
+        matches.add(new Sequence(litLen, 3, 0));
 
         result.sequences = matches;
         result.literals = new byte[litPos];
@@ -100,7 +106,8 @@ class LZ77 {
             dataPos += seq.litLen;
 
             // Match copy
-            byteCopy(data, seq.matchOff, seq.matchLen, data, dataPos);
+            int rawMatchOff = seq.matchOff - 3;
+            byteCopy(data, rawMatchOff, seq.matchLen, data, dataPos);
             dataPos += seq.matchLen;
         }
 
