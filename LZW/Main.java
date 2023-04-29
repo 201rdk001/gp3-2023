@@ -157,7 +157,7 @@ public class Main {
 
         do {
             System.out.print("command>");
-            command = sc.nextLine();
+            command = sc.next();
             switch (command) {
                 case "comp": compress(); break;
                 case "decomp": decompress(); break;
@@ -174,9 +174,9 @@ public class Main {
 
     public static void compress() {
         System.out.println("source file name:");
-        String source=sc.nextLine();
+        String source=sc.next();
         System.out.println("archive name:");
-        String archive=sc.nextLine();
+        String archive=sc.next();
 
         try {
             FileInputStream in = new FileInputStream(source);
@@ -195,9 +195,9 @@ public class Main {
 
     public static void decompress() {
         System.out.println("archive name:");
-        String archive=sc.nextLine();
+        String archive=sc.next();
         System.out.println("file name:");
-        String source=sc.nextLine();
+        String source=sc.next();
 
         try {
             FileInputStream in = new FileInputStream(archive);
@@ -217,9 +217,9 @@ public class Main {
 
     public static void equal() throws IOException {
         System.out.print("first file name: ");
-        String file1 = sc.nextLine();
+        String file1 = sc.next();
         System.out.print("second file name: ");
-        String file2 = sc.nextLine();
+        String file2 = sc.next();
         try {
             FileInputStream f1 = new FileInputStream(file1);
             FileInputStream f2 = new FileInputStream(file2);
@@ -259,7 +259,7 @@ public class Main {
 
     public static void size() {
         System.out.println("file name");
-        String Filename = sc.nextLine();
+        String Filename = sc.next();
         try {
             File file = new File(Filename);
             System.out.println("size: " + file.length());
